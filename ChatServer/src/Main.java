@@ -9,7 +9,6 @@ import java.nio.ByteBuffer;
 
 public class Main {
 
-	static int CONNECTION_COUNT = 0;
 	
 	
 	public static void main(String[] args) throws IOException {
