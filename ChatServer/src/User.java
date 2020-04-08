@@ -18,20 +18,23 @@ public class User implements Runnable{
 		
 	}
 	
-	public void parseRequest(short opcode, String message) {
-        System.out.println(opcode + ":" + message);
+	public void parseRequest(byte opcode, String message) {
+        //System.out.println(String.format("%02X ", opcode) + ":" + message);
         
         switch(opcode) {
-        	case 0xFF:
+        	case (byte) 0xFF:
         		System.out.println(message);
         		break;
         	default:
+        		System.out.println("Missing opcode");
         		break;
      
         }	
 	}
 	
+	@Override
 	public void run() {
+		System.out.println("Running");
 /*		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 		    public void run() {
 		    	synchronized (input) {
@@ -50,6 +53,7 @@ public class User implements Runnable{
 		byte[] commandBuf = new byte[7];
 		try {
 			while(input.read(commandBuf, 0, 7) != -1) {
+				System.out.println("hello");
 	            int length = ByteBuffer.wrap(commandBuf, 0, 4).getInt();
 	            short version = ByteBuffer.wrap(commandBuf, 4, 2).getShort();
 	            byte opcode = commandBuf[6];

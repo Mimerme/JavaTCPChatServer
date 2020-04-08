@@ -26,7 +26,7 @@ public class ChatServer {
 			User connection = new User(input, output, "test");
 			
 			System.out.println("Created a new user");
-			new Thread(connection, "test");
+			new Thread(connection, "test").start();
 		}
 	}
 	
