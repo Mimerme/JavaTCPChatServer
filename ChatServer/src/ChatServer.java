@@ -11,17 +11,9 @@ public class ChatServer {
 
 	private int port;
 	private ServerSocket server;
-	public ArrayList<User> users;
-	public HashMap<Room, ArrayList<User>> rooms = new HashMap();
-	
-	class Room {
-		public String name;
-		public String password;
-		public Room(String name, String pass) {
-			this.name = name;
-			this.password = pass;
-		}
-	}
+	private ArrayList<User> users = new ArrayList<User>();
+	private HashMap<String, ArrayList<User>> rooms = new HashMap();
+	private HashMap<String, String> roomPass = new HashMap<String, String>();
 	
 	
 	public ChatServer(int port) {
@@ -46,6 +38,58 @@ public class ChatServer {
 			
 			System.out.println("Created a new user");
 			new Thread(connection, "test").start();
+		}
+	}
+	
+	//0 = success
+	//1 = already in room
+	//2 = wrong pass
+	public synchronized int joinRoom(User user, String name, String password) {
+		//Have the user leave their existing room
+		if(user.inRoom()) {
+			leaveRoom(user);
+		}
+		
+		//If the room exists
+		if(rooms.containsKey(name)) {
+			ArrayList<User> users = rooms.get(name);
+			
+			if(users.contains(user)) 
+				return 1;
+			
+			
+			if(!password.equals(roomPass.get(name)))
+				return 2;
+			
+			users.add(user);
+		}
+		//If the room doesn't exist create it
+		else {
+			
+			ArrayList<User> userList = new ArrayList();
+			userList.add(user);
+			
+			//Create the room
+			rooms.put(name, userList);
+			roomPass.put(name, password);
+		}
+		
+		user.setRoom(name);
+		return 0;
+	}
+	
+	public synchronized void leaveRoom(User user) {
+		if(user.inRoom()) {
+			String leavingRoom = user.getRoom();
+			ArrayList<User> usrList = rooms.get(leavingRoom);
+			usrList.remove(user);
+			
+			if(usrList.size() == 0) {
+				rooms.remove(leavingRoom);
+				roomPass.remove(leavingRoom);
+			}
+			
+			user.setRoom("");
 		}
 	}
 	
