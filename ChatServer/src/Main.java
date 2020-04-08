@@ -12,7 +12,10 @@ public class Main {
 	
 	
 	public static void main(String[] args) throws IOException {
-		new ChatServer(5000).start();
+		int port = 5000;
+		if(args.length == 1)
+			port = Integer.parseInt(args[0]);
+		new ChatServer(port).start();
 		/*
 		 * ServerSocket server = new ServerSocket(5000); System.out.println("Waiting");
 		 * Socket socket = server.accept(); System.out.println("New connection");

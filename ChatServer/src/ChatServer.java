@@ -3,6 +3,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -19,7 +20,6 @@ public class ChatServer {
 	public ChatServer(int port) {
 		this.port = port;
 	}
-
 	
 	//Start listening for new users
 	//New thread for each user
@@ -39,6 +39,23 @@ public class ChatServer {
 			System.out.println("Created a new user");
 			new Thread(connection, "test").start();
 		}
+	}
+	
+	public synchronized User getUser(String nick) {
+		for (User u : users) {
+			if(u.getNick().equals(nick))
+				return u;
+		}
+		return null;
+	}
+	
+	//Returns false if nickname is taken by someone else
+	public synchronized boolean validNick(String newnick, User user) {
+		for (User u : users) {
+			if(u.getNick().equals(newnick) && u != user)
+				return false;
+		}
+		return true;
 	}
 	
 	//0 = success
@@ -91,6 +108,51 @@ public class ChatServer {
 			
 			user.setRoom("");
 		}
+	}
+	
+	public synchronized byte[] getRooms() {
+		int totalLen = 0;
+		for (String r : rooms.keySet()) {
+			totalLen += r.length();
+		}
+		
+		ByteBuffer b = ByteBuffer.allocate(totalLen + rooms.keySet().size());
+		for (String r : rooms.keySet()) {
+			b.put((byte) r.length());
+			b.put(r.getBytes());
+		}
+		
+		return b.array();
+	}
+	
+	public synchronized byte[] getRoomUserList(String room) {
+		int totalLen = 0;
+		for (User u : rooms.get(room)) {
+			totalLen += u.getNick().length();
+		}
+		
+		ByteBuffer b = ByteBuffer.allocate(totalLen + users.size());
+		for (User u : rooms.get(room)) {
+			b.put((byte) u.getNick().length());
+			b.put(u.getNick().getBytes());
+		}
+		
+		return b.array();
+	}
+	
+	public synchronized byte[] getUserList() {
+		int totalLen = 0;
+		for (User u : users) {
+			totalLen += u.getNick().length();
+		}
+		
+		ByteBuffer b = ByteBuffer.allocate(totalLen + users.size());
+		for (User u : users) {
+			b.put((byte) u.getNick().length());
+			b.put(u.getNick().getBytes());
+		}
+		
+		return b.array();
 	}
 	
 }
