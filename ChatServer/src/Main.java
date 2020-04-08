@@ -22,7 +22,6 @@ public class Main {
 		InputStream input = socket.getInputStream();
 		OutputStream output = socket.getOutputStream();
 		
-		BufferedReader reader = new BufferedReader(new InputStreamReader(input));
 		
 		int c;
 		byte[] commandBuf = new byte[7];
@@ -45,7 +44,6 @@ public class Main {
 
             byte[] msg = new byte[length];
             input.read(msg);
-            		
             String m = new String(ByteBuffer.wrap(msg).array(), "ASCII");
             
         }
@@ -53,19 +51,6 @@ public class Main {
         output.close();
         input.close();
 		
-	}
-	
-	public static void ParseRequest(short opcode, String message) {
-        System.out.println(opcode + ":" + message);
-        
-        switch(opcode) {
-        	case 0xFF:
-        		System.out.println(message);
-        		break;
-        	default:
-        		break;
-     
-        }
 	}
 
 }
