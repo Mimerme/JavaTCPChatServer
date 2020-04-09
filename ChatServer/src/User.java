@@ -3,6 +3,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class User implements Runnable{
 	private String nick;
@@ -18,24 +19,38 @@ public class User implements Runnable{
 		this.server = server;
 	}
 
-	public boolean inRoom() {
+	public synchronized boolean inRoom() {
 		return !room.equals("");
 	}
 
-	public String getRoom() {
+	public synchronized String getRoom() {
 		return room;
 	}
 
-	public void setRoom(String room) {
+	public synchronized void setRoom(String room) {
 		this.room = room;
 	}
 
-	public String getNick() {
+	public synchronized String getNick() {
 		return nick;
 	}
 
-	public void sendByteMessage(byte[] message, boolean success) throws IOException {
-		//Add one for the opcode
+	public synchronized void sendChatMessage(byte opcode, byte[] message) throws IOException {
+		int len = message.length;
+
+		//Add 1 to account for the return code
+		//2 for 0x0416
+		//4 for the length
+		ByteBuffer b = ByteBuffer.allocate(len + 1 + 2 + 4);
+		b.putInt(len);
+		b.putShort((short) 0x0417);
+		b.put(opcode);
+		b.put(message);
+		output.write(b.array());
+	}
+
+	public synchronized void sendByteMessage(byte[] message, boolean success) throws IOException {
+		//Add one for the status code
 		int len = message.length + 1;
 		byte returnCode;
 
@@ -56,8 +71,8 @@ public class User implements Runnable{
 		output.write(b.array());
 	}
 
-	public void sendMessage(String message, boolean success) throws IOException {
-		//Add one for the opcode
+	public synchronized void sendMessage(String message, boolean success) throws IOException {
+		//Add one for the status code
 		int len = message.length() + 1;
 		byte returnCode;
 
@@ -69,6 +84,7 @@ public class User implements Runnable{
 		//Add 1 to account for the return code
 		//2 for 0x0416
 		//4 for the length
+		System.out.println("len: " + len);
 		ByteBuffer b = ByteBuffer.allocate(len + 1 + 2 + 4);
 		b.putInt(len);
 		b.putShort((short) 0x0417);
@@ -78,22 +94,20 @@ public class User implements Runnable{
 		output.write(b.array());
 	}
 
-	public void sendMessage() {
-
-	}
-
-	public void parseRequest(byte opcode, byte[] message) throws IOException {
+	//Returns continue?
+	public boolean parseRequest(byte opcode, byte[] message) throws IOException {
 		System.out.println(String.format("%02X ", opcode));
 
 		switch(opcode) {
 		//Handhskae
 		case (byte) 0xFF:
-			/*
-			 * try { //System.out.println(new String(message, "ASCII")); } catch
-			 * (UnsupportedEncodingException e) { // TODO Auto-generated catch block
-			 * e.printStackTrace(); }
-			 */
-			sendMessage(this.nick, true);
+			System.out.println(new String(message, "ASCII"));
+		/*
+		 * try { //System.out.println(new String(message, "ASCII")); } catch
+		 * (UnsupportedEncodingException e) { // TODO Auto-generated catch block
+		 * e.printStackTrace(); }
+		 */
+		sendMessage(this.nick, true);
 		break;
 		//Join room
 		case 0x0A:
@@ -119,8 +133,19 @@ public class User implements Runnable{
 			break;
 			//Leave room
 		case 0x0B:
-			server.leaveRoom(this);
-			sendMessage("", true);
+			if(inRoom()) {
+				server.leaveRoom(this);
+				sendMessage("", true);
+			}
+			else {
+				//Update the server
+				server.disconnect(this);
+
+				//Close the connections
+				input.close();
+				output.close();
+				return false;
+			}
 			break;
 			//List rooms
 		case 0x0C:
@@ -139,7 +164,8 @@ public class User implements Runnable{
 			break;
 			//Set nickname
 		case 0x0E:
-			String newNick = new String(message, "ASCII");
+			String newNick = new String(Arrays.copyOfRange(message, 1, message.length), "ASCII");
+			System.out.println(newNick);
 			if(server.validNick(newNick, this)) {
 				this.nick = newNick;
 				sendMessage("", true);
@@ -149,15 +175,44 @@ public class User implements Runnable{
 			break;
 			//Direct Message
 		case 0x0F:
-			
+			byte destLen = message[0];
+			short msgLen = ByteBuffer.wrap(message, destLen + 1, 2).getShort();
+
+			String total1 = new String(message, "ASCII");
+			String dest = total1.substring(1, 1 + destLen);
+			String msg = total1.substring(3 + destLen, 3 + destLen + msgLen);
+
+			System.out.println("dest: " + dest + " msg: " + msg);
+			if(server.sendDirectMessage(dest, msg, this.getNick()))
+				sendMessage("", true);
+			else
+				sendMessage("Nick not present", false);
 			break;
 		case 0x10:
+			byte roomLen = message[0];
+			short msgLen2 = ByteBuffer.wrap(message, roomLen + 1, 2).getShort();
+
+			String total2 = new String(message, "ASCII");
+			String room = total2.substring(1, 1 + roomLen);
+			String roommsg = total2.substring(3 + roomLen, 3 + roomLen + msgLen2);
+
+			System.out.println("room: " + room);
+			if(room.equals(this.room) && !room.equals("")) {
+				server.sendRoomMessage(room, roommsg, this.getNick());
+				sendMessage("", true);
+			}
+			else {
+				sendMessage("You shout into the void and hear nothing.", false);	
+			}
+
 			break;
 		default:
 			System.out.println("Missing opcode");
 			break;
 
-		}	
+		}
+		
+		return true;
 	}
 
 	public void run() {
@@ -174,7 +229,7 @@ public class User implements Runnable{
 		    }
 		}));*/
 
-
+		System.out.println("User joined");
 		int c;
 		byte[] commandBuf = new byte[7];
 		try {
@@ -192,12 +247,25 @@ public class User implements Runnable{
 				byte[] msg = new byte[length];
 				input.read(msg);
 
-				parseRequest(opcode, msg);
+				if(parseRequest(opcode, msg) == false)
+					return;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
+		System.out.println("User unexpectedly disconnected");
+		try {
+			//Update the server
+			server.disconnect(this);
+
+			//Close the connections
+			input.close();
+			output.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 

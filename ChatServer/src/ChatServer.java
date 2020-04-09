@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map.Entry;
 
 public class ChatServer {
 	static int CONNECTION_COUNT = 0;
@@ -19,6 +20,43 @@ public class ChatServer {
 	
 	public ChatServer(int port) {
 		this.port = port;
+	}
+	
+	//true = success
+	//false = nick not present
+	public synchronized boolean sendDirectMessage(String destNick, String message, String sender) throws IOException {
+		User user = getUser(destNick);
+		if(user == null)
+			return false;
+		
+		ByteBuffer b = ByteBuffer.allocate(3 + sender.length() + message.length());
+		b.put((byte) sender.length());
+		b.put(sender.getBytes());
+		b.putShort((short) message.length());
+		b.put(message.getBytes());
+		
+		user.sendChatMessage((byte) 0x0F, b.array());
+		
+		return true;
+	}
+	
+	public synchronized void sendRoomMessage(String room, String message, String sender) throws IOException {
+		ArrayList<User> roomusers = rooms.get(room);
+		
+		for (User user : roomusers) {
+			if(user.getNick().equals(sender))
+				continue;
+			
+			ByteBuffer b = ByteBuffer.allocate(4 + sender.length() + message.length() + room.length());
+			b.put((byte) room.length());
+			b.put(room.getBytes());
+			b.put((byte) sender.length());
+			b.put(sender.getBytes());
+			b.putShort((short) message.length());
+			b.put(message.getBytes());
+			
+			user.sendChatMessage((byte) 0x10, b.array());
+		}
 	}
 	
 	//Start listening for new users
@@ -138,6 +176,12 @@ public class ChatServer {
 		}
 		
 		return b.array();
+	}
+	
+	//Update the server when the user disconnects
+	public synchronized void disconnect(User user) {
+		users.remove(user);
+		leaveRoom(user);
 	}
 	
 	public synchronized byte[] getUserList() {
